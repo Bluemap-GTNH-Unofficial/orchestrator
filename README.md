@@ -31,6 +31,10 @@ uv run orch verify gt-machines          # verifyDump an already built scene agai
 uv run --group dev pytest
 ```
 
+From Python, `Server.bmh(*args)` runs any harness subcommand; `Server.te_nbt(dim, x, y, z, patch)` (patch: JSON-patch
+dict or SNBT string, written to `bmh-out/te-nbt.{json,snbt}`) and `Server.use(dim, x, y, z, side, item, meta=0,
+yaw=None, count=1)` wrap `bmh te-nbt` / `bmh use`. One RCON connection is kept open per `Server` (`close_rcon()`).
+
 Scenes are defined in `src/orchestrator/scenes.py`. Every scene starts from an empty level folder, sets
 `doDaylightCycle/doMobSpawning/doFireTick/mobGriefing false`, writes `registry.json`, builds, `bmh hold`s the chunks of
 its dump box (so tile entities there tick and settle), waits 15 s, drops the box's scheduled block updates

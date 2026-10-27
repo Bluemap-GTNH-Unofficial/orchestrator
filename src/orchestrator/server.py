@@ -211,3 +211,24 @@ class Server:
         if status == "OK":
             return json.loads(payload) if payload else {}
         raise ServerError(f"bmh {' '.join(map(str, args))}: {reply.strip()}")
+
+    def te_nbt(self, dim: int, x: int, y: int, z: int, patch: dict | str, file: str = "te-nbt") -> dict:
+        """`bmh te-nbt`: ``patch`` is a JSON patch object (see the harness README) or an SNBT string; returns the
+        tile entity's NBT afterwards."""
+        name = f"{file}.snbt" if isinstance(patch, str) else f"{file}.json"
+        path = self.root / "bmh-out" / name
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(patch if isinstance(patch, str) else json.dumps(patch), encoding="utf-8")
+        return self.bmh("te-nbt", dim, x, y, z, name)
+
+    def use(self, dim: int, x: int, y: int, z: int, side: str | int, item: str, meta: int = 0,
+            yaw: float | None = None, count: int = 1) -> dict:  # fmt: skip
+        """`bmh use`: right-click face ``side`` of block x/y/z with ``count`` x ``item:meta``; ``yaw`` defaults to
+        looking at the face, as in the harness."""
+        args: list[str | int | float] = ["use", dim, x, y, z, side, item, meta]
+        if yaw is not None or count != 1:
+            face = {"5": "EAST", "4": "WEST", "3": "SOUTH"}.get(str(side), str(side).upper())
+            args.append(yaw if yaw is not None else {"EAST": 90, "WEST": 270, "SOUTH": 180}.get(face, 0))
+        if count != 1:
+            args.append(count)
+        return self.bmh(*args)
