@@ -5,8 +5,11 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
 import shutil
+import subprocess
 import sys
+import time
 from pathlib import Path
 
 from orchestrator.server import Server, ServerConfig, ServerError
@@ -110,12 +113,85 @@ def cmd_snapshots(_: argparse.Namespace) -> None:
             print(p.name)
 
 
+def verify_dump(result: dict) -> dict:
+    """Runs `:legacy:verifyDump` on a scene's snapshot and dump (box = the dump box)."""
+    args = [result["snapshot"], "minecraft:overworld", str(Path(result["out"]) / "dump.ndjson"), "--box"]
+    args += [str(v) for v in result["dump_box"]]
+    cmd = ["mise", "exec", "--", "./gradlew", "-q", ":legacy:verifyDump", "--args=" + " ".join(args)]
+    started = time.time()
+    proc = subprocess.run(cmd, cwd=workspace() / "BlueMap-GTNH", capture_output=True, text=True)
+    match = re.search(r"^mismatches: (\d+)$", proc.stdout, re.MULTILINE)
+    report = proc.stdout.strip().splitlines()[:60]
+    if match is None:
+        report += proc.stderr.strip().splitlines()[-30:]
+    return {
+        "mismatches": int(match.group(1)) if match else None,
+        "exit": proc.returncode,
+        "seconds": round(time.time() - started, 1),
+        "report": report,
+    }
+
+
+def scene_out(name: str) -> Path:
+    return workspace() / "out" / "scenes" / name
+
+
+def verify_scene(name: str) -> dict:
+    """verifyDump for an already built scene; stores the result in its scene.json."""
+    path = scene_out(name) / "scene.json"
+    if not path.is_file():
+        raise ServerError(f"{path} does not exist; build the scene first")
+    result = json.loads(path.read_text(encoding="utf-8"))
+    if "dump_box" not in result:
+        raise ServerError(f"scene {name} has no dump")
+    result["verify"] = verify_dump(result)
+    path.write_text(json.dumps(result, indent=2), encoding="utf-8")
+    return result
+
+
+def run_scene(args: argparse.Namespace, name: str) -> dict:
+    from orchestrator import scenes
+
+    result = scenes.run(name, make_server(args), scene_out(name), snapshots_dir() / name)
+    if args.verify and "dump_box" in result:
+        result = verify_scene(name)
+    return result
+
+
+def cmd_verify(args: argparse.Namespace) -> None:
+    verify = verify_scene(args.name)["verify"]
+    print(json.dumps(verify, indent=2))
+    if verify["mismatches"] != 0:
+        raise ServerError(f"verifyDump of {args.name}: {verify['mismatches']} mismatches (exit {verify['exit']})")
+
+
 def cmd_scene(args: argparse.Namespace) -> None:
     from orchestrator import scenes
 
-    out = workspace() / "out" / "scenes" / args.name
-    result = scenes.run(args.name, make_server(args), out, snapshots_dir() / args.name)
-    print(json.dumps(result, indent=2))
+    if args.list:
+        for name, scene in scenes.SCENES.items():
+            print(f"{name:16} {scene.level_type:5} {scene.description}")
+        return
+    if args.name is None:
+        raise ServerError("scene name required (or --list, or all)")
+    if args.name != "all":
+        print(json.dumps(run_scene(args, args.name), indent=2))
+        return
+    summary: dict[str, dict] = {}
+    for name in scenes.SCENES:
+        try:
+            result = run_scene(args, name)
+        except ServerError as e:
+            summary[name] = {"error": str(e)}
+        else:
+            summary[name] = {
+                k: result[k] for k in ("placed", "failed", "formed", "pregen", "dump", "verify", "seconds") if k in result
+            }
+        print(json.dumps({name: summary[name]}), flush=True)
+    print(json.dumps(summary, indent=2))
+    failed = [n for n, s in summary.items() if "error" in s or s.get("verify", {}).get("mismatches", 0) != 0]
+    if failed:
+        raise ServerError(f"scenes failed: {', '.join(failed)}")
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -152,9 +228,14 @@ def build_parser() -> argparse.ArgumentParser:
     sub.add_parser("delete-level", help="delete the level folder").set_defaults(func=cmd_delete_level)
     sub.add_parser("snapshots").set_defaults(func=cmd_snapshots)
 
-    p = sub.add_parser("scene", help="build a deterministic scene world")
-    p.add_argument("name")
+    p = sub.add_parser("scene", help="build a deterministic scene world (or `all` of them)")
+    p.add_argument("name", nargs="?", help="scene name or `all`")
+    p.add_argument("--list", action="store_true", help="list scenes")
+    p.add_argument("--verify", action="store_true", help="run :legacy:verifyDump on each scene's dump")
     p.set_defaults(func=cmd_scene)
+    p = sub.add_parser("verify", help="run :legacy:verifyDump on a built scene (out/scenes/<name>, worlds/<name>)")
+    p.add_argument("name")
+    p.set_defaults(func=cmd_verify)
     return parser
 
 

@@ -78,6 +78,7 @@ class Server:
     def __init__(self, config: ServerConfig) -> None:
         self.config = config
         self._proc: subprocess.Popen[bytes] | None = None
+        self._rcon: RconClient | None = None
 
     @property
     def root(self) -> Path:
@@ -157,6 +158,8 @@ class Server:
         except (OSError, RconError):
             # RCON is gone: the server crashed or is shutting down already
             self._signal_group(pid, signal.SIGTERM)
+        finally:
+            self.close_rcon()
         deadline = time.monotonic() + timeout
         while time.monotonic() < deadline:
             if self.pid() is None:
@@ -180,8 +183,26 @@ class Server:
         return RconClient("127.0.0.1", self.config.rcon_port, self.config.password())
 
     def rcon(self, *commands: str) -> list[str]:
-        with self.rcon_client() as client:
-            return [client.command(c) for c in commands]
+        """Sends commands over one RCON connection that is kept open between calls (a scene sends thousands of
+        commands; a connection per command occasionally got reset by the 1.7.10 RCON listener). The connection is
+        dropped on any error, so the next call reconnects; a failed command is never resent."""
+        replies = []
+        for command in commands:
+            if self._rcon is None:
+                client = self.rcon_client()
+                client.connect()
+                self._rcon = client
+            try:
+                replies.append(self._rcon.command(command))
+            except (OSError, RconError):
+                self.close_rcon()
+                raise
+        return replies
+
+    def close_rcon(self) -> None:
+        if self._rcon is not None:
+            self._rcon.close()
+            self._rcon = None
 
     def bmh(self, *args: str | int) -> dict:
         """Run a `bmh` harness subcommand and return its JSON payload."""
