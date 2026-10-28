@@ -18,9 +18,10 @@ DEFAULT_SERVER = "gtnh-2.9.0-RC-2"
 
 
 def workspace() -> Path:
+    """The workspace holding this repo and its siblings (`BlueMap/`, `servers/`, ...); override with BMGTNH_WORKSPACE."""
     env = os.environ.get("BMGTNH_WORKSPACE")
-    # src/orchestrator/cli.py -> orchestrator project -> testing -> BlueMap-GTNH -> workspace
-    return Path(env) if env else Path(__file__).resolve().parents[5]
+    # src/orchestrator/cli.py -> src -> orchestrator repo -> workspace
+    return Path(env) if env else Path(__file__).resolve().parents[3]
 
 
 def snapshots_dir() -> Path:
@@ -119,7 +120,7 @@ def verify_dump(result: dict) -> dict:
     args += [str(v) for v in result["dump_box"]]
     cmd = ["mise", "exec", "--", "./gradlew", "-q", ":legacy:verifyDump", "--args=" + " ".join(args)]
     started = time.time()
-    proc = subprocess.run(cmd, cwd=workspace() / "BlueMap-GTNH", capture_output=True, text=True)
+    proc = subprocess.run(cmd, cwd=workspace() / "BlueMap", capture_output=True, text=True)
     match = re.search(r"^mismatches: (\d+)$", proc.stdout, re.MULTILINE)
     report = proc.stdout.strip().splitlines()[:60]
     if match is None:
