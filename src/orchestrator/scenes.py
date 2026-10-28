@@ -16,6 +16,7 @@ from collections.abc import Callable, Iterable
 from dataclasses import dataclass
 from pathlib import Path
 
+from orchestrator.addon_scenes import ADDON_SCENES
 from orchestrator.mod_scenes import mod_renderers
 from orchestrator.server import Server, ServerError
 
@@ -340,6 +341,7 @@ SCENES: dict[str, Scene] = {
     "gt-multiblocks": _flat(_gt_multiblocks, "GT, GT++, bartworks, TecTech, kekztech multiblocks built with hatches"),
     "terrain-rwg": Scene(level_type="rwg", build=_terrain, description="RWG terrain, 32x32 chunks pregenerated"),
     "mod-renderers": _flat(mod_renderers, "Chisel CTM, Iron Chests, BiblioCraft, AE2 cables + parts, EnderIO conduits"),
+    **{name: _flat(build, description) for name, (build, description) in ADDON_SCENES.items()},
 }
 
 

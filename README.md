@@ -51,3 +51,15 @@ verifyDump result.
 | `gt-ores` | FLAT | `gt-ores.json`; every material on every `gt.blockores2` stone, normal + small, plus the first material on every stone of `gt.blockores3..7` (`ores[-placed].json`) |
 | `gt-multiblocks` | FLAT | `MULTIBLOCKS` (GT, GT++, bartworks, TecTech, kekztech) every 48 blocks along +x at y=20, facing NORTH: `bmh multiblock … survival` (creative for the bricked blast furnace), then hatches the build leaves out placed with `bmh mte` and `multiblock … check`; `formed` per controller in `multiblocks.json` |
 | `terrain-rwg` | rwg, seed 1710 | `bmh pregen` of chunks -16..15 in strips of 8 columns; dump of blocks (0,0,0)..(31,255,31) |
+| `addons-zoo` | FLAT | needs the community addons (below): `bmh zoo <namespace>` per addon (TST, GTNL, PH, 123T, NHU, Box++) side by side along +x (`zoo-<addon>.json`) |
+| `addons-machines` | FLAT | needs the addons: every addon MTE (picked by class package from `mtes.json`, minus `CRASHING_MTES`) via `place-list` facing NORTH, one list per addon along +x (`machines-<addon>[-placed].json`) |
+| `addons-multiblocks` | FLAT | needs the addons: `MULTIBLOCKS` of `addon_scenes.py` (survival, Box++ creative) at y=20 spaced by their measured width; a row of addon TESR blocks at z=-48 and a row with effects switched on via `te-nbt` at z=-64 (`multiblocks.json`) |
+
+The `addons-*` scenes (`src/orchestrator/addon_scenes.py`) run on `servers/gtnh-addons`: the reference server plus the
+six addon jars of `<workspace>/downloads/addons/versions.json` and two config changes the addons need on RC-2 —
+`config/GregTech/GregTech.cfg` `crashOnNullRecipeInput=false` (TST 0.8.0-RC2.9 builds an extreme-crafting recipe from
+the empty ore dictionary entry `craftingBlastFurnace` and would crash the load) and
+`config/GTNotLeisure/GTNotLeisure.cfg` `enableRecipeOutputChance=false` (GTNL 0.2.7-rc2's mixin into TST's
+`GTCM_ParallelHelper` fails against TST RC2.9, making every TST multiblock unloadable). Use
+`uv run orch --server gtnh-addons --port 25568 --rcon-port 25578 scene addons-zoo --verify`. They fail fast on a server
+without the addons, so `scene all` on the reference server reports them as failed.
