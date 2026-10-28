@@ -24,9 +24,10 @@ uv run orch stop
 uv run orch --level scene-x --level-type FLAT start
 uv run orch snapshot <name> | restore <name> | delete-level | snapshots
 uv run orch scene vanilla-zoo           # fresh world -> bmh zoo + dump -> out/ and worlds/
-uv run orch scene --list                # name, level type, description of every scene
+uv run orch scene --list                # name, level type, required server, description of every scene
 uv run orch scene gt-machines --verify  # ... then ./gradlew :legacy:verifyDump on the snapshot + dump
-uv run orch scene all --verify          # every scene in turn; summary JSON; exit 1 if any failed or mismatched
+uv run orch scene all --verify          # every scene runnable on --server (others printed as skipped); summary
+                                        # JSON; exit 1 if any run failed or mismatched
 uv run orch verify gt-machines          # verifyDump an already built scene again (result into scene.json)
 uv run --group dev pytest
 ```
@@ -34,6 +35,11 @@ uv run --group dev pytest
 From Python, `Server.bmh(*args)` runs any harness subcommand; `Server.te_nbt(dim, x, y, z, patch)` (patch: JSON-patch
 dict or SNBT string, written to `bmh-out/te-nbt.{json,snbt}`) and `Server.use(dim, x, y, z, side, item, meta=0,
 yaw=None, count=1)` wrap `bmh te-nbt` / `bmh use`. One RCON connection is kept open per `Server` (`close_rcon()`).
+
+Each scene declares the server directories whose mod set it needs (`Scene.servers`): the vanilla, GT and
+mod-renderer scenes run on `gtnh-2.9.0-RC-2`, the addon scenes (`addon_scenes.py`) on `gtnh-addons`
+(`--server gtnh-addons --port 25568 --rcon-port 25578`). Every scene runs on one kind of server only, so
+`out/scenes/<scene>` and `worlds/<scene>` stay unique; `scene <name>` on another server fails before starting it.
 
 Scenes are defined in `src/orchestrator/scenes.py`. Every scene starts from an empty level folder, sets
 `doDaylightCycle/doMobSpawning/doFireTick/mobGriefing false`, writes `registry.json`, builds, `bmh hold`s the chunks of

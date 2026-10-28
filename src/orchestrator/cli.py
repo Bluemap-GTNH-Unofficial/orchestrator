@@ -170,15 +170,19 @@ def cmd_scene(args: argparse.Namespace) -> None:
 
     if args.list:
         for name, scene in scenes.SCENES.items():
-            print(f"{name:16} {scene.level_type:5} {scene.description}")
+            servers = ",".join(sorted(scene.servers))
+            print(f"{name:18} {scene.level_type:5} {servers:16} {scene.description}")
         return
     if args.name is None:
         raise ServerError("scene name required (or --list, or all)")
     if args.name != "all":
         print(json.dumps(run_scene(args, args.name), indent=2))
         return
+    runnable, skipped = scenes.plan(args.server)
+    for name, reason in skipped.items():
+        print(json.dumps({name: {"skipped": reason}}), flush=True)
     summary: dict[str, dict] = {}
-    for name in scenes.SCENES:
+    for name in runnable:
         try:
             result = run_scene(args, name)
         except ServerError as e:

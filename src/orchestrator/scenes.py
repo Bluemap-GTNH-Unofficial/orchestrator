@@ -84,6 +84,10 @@ TERRAIN_STRIP = 8  # chunk columns per pregen command
 TERRAIN_DUMP_BOX = (0, 0, 0, 31, 255, 31)
 
 
+REFERENCE_SERVER = "gtnh-2.9.0-RC-2"
+ADDON_SERVER = "gtnh-addons"
+
+
 @dataclass(frozen=True)
 class Scene:
     level_type: str
@@ -91,6 +95,15 @@ class Scene:
     description: str
     seed: str = "1710"
     generator_settings: str = ""
+    # server directories (under <workspace>/servers) with the mod set the scene needs; each scene runs on one kind of
+    # server only, so out/scenes/<scene> and worlds/<scene> stay unique
+    servers: frozenset[str] = frozenset({REFERENCE_SERVER})
+
+    def unmet(self, server: str) -> str | None:
+        """Why the scene cannot run on server directory ``server``, or None if it can."""
+        if server in self.servers:
+            return None
+        return f"needs --server {' or '.join(sorted(self.servers))}"
 
 
 def _read_out(server: Server, file: str) -> dict:
@@ -328,8 +341,12 @@ def _terrain(server: Server) -> dict:
     return {"pregen": pregen, "dump_box": list(TERRAIN_DUMP_BOX)}
 
 
-def _flat(build: Callable[[Server], dict], description: str) -> Scene:
-    return Scene(level_type="FLAT", generator_settings=FLAT_NO_STRUCTURES, build=build, description=description)
+def _flat(
+    build: Callable[[Server], dict], description: str, servers: frozenset[str] = frozenset({REFERENCE_SERVER})
+) -> Scene:
+    return Scene(
+        level_type="FLAT", generator_settings=FLAT_NO_STRUCTURES, build=build, description=description, servers=servers
+    )
 
 
 SCENES: dict[str, Scene] = {
@@ -341,14 +358,32 @@ SCENES: dict[str, Scene] = {
     "gt-multiblocks": _flat(_gt_multiblocks, "GT, GT++, bartworks, TecTech, kekztech multiblocks built with hatches"),
     "terrain-rwg": Scene(level_type="rwg", build=_terrain, description="RWG terrain, 32x32 chunks pregenerated"),
     "mod-renderers": _flat(mod_renderers, "Chisel CTM, Iron Chests, BiblioCraft, AE2 cables + parts, EnderIO conduits"),
-    **{name: _flat(build, description) for name, (build, description) in ADDON_SCENES.items()},
+    **{
+        name: _flat(build, description, frozenset({ADDON_SERVER}))
+        for name, (build, description) in ADDON_SCENES.items()
+    },
 }
+
+
+def plan(server: str, scenes: dict[str, Scene] | None = None) -> tuple[list[str], dict[str, str]]:
+    """Scenes runnable on server directory ``server`` (in definition order) and the skipped ones with the reason."""
+    runnable, skipped = [], {}
+    for name, scene in (SCENES if scenes is None else scenes).items():
+        reason = scene.unmet(server)
+        if reason is None:
+            runnable.append(name)
+        else:
+            skipped[name] = reason
+    return runnable, skipped
 
 
 def run(name: str, base: Server, out: Path, snapshot: Path) -> dict:
     scene = SCENES.get(name)
     if scene is None:
         raise ServerError(f"unknown scene {name!r}; known: {', '.join(SCENES)}")
+    reason = scene.unmet(base.root.name)
+    if reason is not None:
+        raise ServerError(f"scene {name} cannot run on server {base.root.name}: {reason}")
     level = f"scene-{name}"
     config = dataclasses.replace(
         base.config,

@@ -1,6 +1,17 @@
 import itertools
 
-from orchestrator.scenes import chunk_strips, north_list, ore_list, pipe_plan, sample_list
+from orchestrator.scenes import (
+    ADDON_SERVER,
+    REFERENCE_SERVER,
+    SCENES,
+    Scene,
+    chunk_strips,
+    north_list,
+    ore_list,
+    pipe_plan,
+    plan,
+    sample_list,
+)
 
 
 def _mtes() -> list[dict]:
@@ -109,3 +120,21 @@ def test_chunk_strips_cover_the_rectangle_exactly_within_the_cap():
     assert sorted(covered) == [(x, z) for x in range(-3, 61) for z in range(-2, 5)]
     assert all((x2 - x1 + 1) * (z2 - z1 + 1) <= 100 for x1, z1, x2, z2 in strips)
     assert len(strips) == 5  # 64 columns of 7 chunks, 14 columns per strip
+
+
+def test_plan_runs_only_scenes_whose_server_matches_and_explains_the_rest():
+    def scene(*servers):
+        return Scene(level_type="FLAT", build=lambda s: {}, description="", servers=frozenset(servers))
+
+    scenes = {"a": scene("ref"), "b": scene("addons"), "c": scene("ref", "addons")}
+    assert plan("ref", scenes) == (["a", "c"], {"b": "needs --server addons"})
+    assert plan("addons", scenes) == (["b", "c"], {"a": "needs --server ref"})
+    assert plan("other", scenes) == ([], {"a": "needs --server ref", "b": "needs --server addons", "c": "needs --server addons or ref"})
+
+
+def test_every_scene_runs_on_exactly_one_kind_of_server():
+    reference, _ = plan(REFERENCE_SERVER)
+    addons, _ = plan(ADDON_SERVER)
+    assert not set(reference) & set(addons)
+    assert set(reference) | set(addons) == set(SCENES)
+    assert {"addons-zoo", "addons-machines", "addons-multiblocks"} <= set(addons)
