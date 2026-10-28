@@ -216,7 +216,7 @@ def build_parser() -> argparse.ArgumentParser:
     p.set_defaults(func=cmd_rcon)
 
     p = sub.add_parser("bmh", help="run a bmh harness subcommand, print its JSON")
-    p.add_argument("args", nargs="+")
+    p.add_argument("args", nargs=argparse.REMAINDER, help="subcommand and arguments (options such as --tag pass through)")
     p.set_defaults(func=cmd_bmh)
 
     p = sub.add_parser("snapshot", help="copy the level folder to <workspace>/worlds/<name>")

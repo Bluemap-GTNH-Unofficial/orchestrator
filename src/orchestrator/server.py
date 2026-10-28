@@ -222,13 +222,20 @@ class Server:
         return self.bmh("te-nbt", dim, x, y, z, name)
 
     def use(self, dim: int, x: int, y: int, z: int, side: str | int, item: str, meta: int = 0,
-            yaw: float | None = None, count: int = 1) -> dict:  # fmt: skip
+            yaw: float | None = None, count: int = 1, tag: dict | str | None = None) -> dict:  # fmt: skip
         """`bmh use`: right-click face ``side`` of block x/y/z with ``count`` x ``item:meta``; ``yaw`` defaults to
-        looking at the face, as in the harness."""
+        looking at the face, as in the harness. ``tag`` (JSON-patch dict or SNBT string, typed as for te-nbt) becomes
+        the item's NBT."""
         args: list[str | int | float] = ["use", dim, x, y, z, side, item, meta]
         if yaw is not None or count != 1:
             face = {"5": "EAST", "4": "WEST", "3": "SOUTH"}.get(str(side), str(side).upper())
             args.append(yaw if yaw is not None else {"EAST": 90, "WEST": 270, "SOUTH": 180}.get(face, 0))
         if count != 1:
             args.append(count)
+        if tag is not None:
+            name = "use-tag.snbt" if isinstance(tag, str) else "use-tag.json"
+            path = self.root / "bmh-out" / name
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text(tag if isinstance(tag, str) else json.dumps(tag), encoding="utf-8")
+            args += ["--tag", name]
         return self.bmh(*args)

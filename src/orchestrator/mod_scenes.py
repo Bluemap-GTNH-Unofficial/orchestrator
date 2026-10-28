@@ -220,20 +220,15 @@ def _enderio(server: Server, log: list) -> None:
     _try(log, "chest", lambda: server.use(OVERWORLD, 6, FLOOR_Y, z, "UP", "minecraft:chest", 0))
 
 
-# AE2 facade item id in a fresh GTNH 2.9.0-RC-2 world (FML assigns ids deterministically for the same mod set;
-# AE2 drops a facade stack with another id, which the te-nbt reply shows)
-AE2_FACADE_ITEM_ID = 4620
 FACADE_Z = ENDERIO_Z + 24
+AE2_FACADE = "appliedenergistics2:item.ItemFacade"
 
 
-def _ae2_facade(block: str, meta: int) -> dict:
+def _ae2_facade_tag(block: str, meta: int) -> dict:
+    """NBT of an AE2 facade item for ``block:meta`` (as `ItemFacade.createFacadeForItem` writes it; the item id is
+    resolved from the registry name by the harness)."""
     modid, name = block.split(":", 1)
-    return {
-        "id": {"@short": AE2_FACADE_ITEM_ID},
-        "Count": {"@byte": 1},
-        "Damage": {"@short": 0},
-        "tag": {"x": {"@ints": [1, meta]}, "modid": modid, "itemname": name},
-    }
+    return {"x": {"@ints": [{"@itemId": block}, meta]}, "modid": modid, "itemname": name}
 
 
 def _facades(server: Server, log: list) -> None:
@@ -242,10 +237,11 @@ def _facades(server: Server, log: list) -> None:
     samples = [("minecraft:stone", 0), ("minecraft:planks", 1), ("minecraft:wool", 14), ("chisel:factoryblock", 4)]
     for i, (block, meta) in enumerate(samples):
         x = i * 3
-        # a glass cable with a facade on its north and top sides, next to a bare one
+        # a glass cable with a facade on its north and top sides (right-clicked with a facade item), next to a bare one
         _try(log, f"facade cable {block}", lambda: server.use(OVERWORLD, x, FLOOR_Y, z, "UP", AE2_PART, AE2_CABLES["glass"] + FLUIX))
         _try(log, f"facade cable 2 {block}", lambda: server.use(OVERWORLD, x + 1, FLOOR_Y, z, "UP", AE2_PART, AE2_CABLES["glass"] + FLUIX))
-        _try(log, f"ae2 facade {block}:{meta}", lambda: server.te_nbt(OVERWORLD, x, Y, z, {"facade:2": _ae2_facade(block, meta), "facade:1": _ae2_facade(block, meta)}))
+        for side in ("NORTH", "UP"):
+            _try(log, f"ae2 facade {block}:{meta} {side}", lambda: server.use(OVERWORLD, x, Y, z, side, AE2_FACADE, 0, tag=_ae2_facade_tag(block, meta)))
         # an item conduit line whose middle bundle carries a facade
         for dx in range(3):
             _try(log, f"facade conduit {block}", lambda: server.use(OVERWORLD, x + dx, FLOOR_Y, z + 3, "UP", "EnderIO:itemItemConduit", 0))
