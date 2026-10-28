@@ -1,6 +1,6 @@
 import itertools
 
-from orchestrator.scenes import north_list, ore_list, pipe_plan, sample_list
+from orchestrator.scenes import chunk_strips, north_list, ore_list, pipe_plan, sample_list
 
 
 def _mtes() -> list[dict]:
@@ -101,3 +101,11 @@ def test_ore_list_has_all_ores2_and_one_sample_per_other_stone_and_size():
         {"name": "gregtech:gt.blockores3", "meta": 6},
         {"name": "gregtech:gt.blockores3", "meta": 16008},
     ]
+
+
+def test_chunk_strips_cover_the_rectangle_exactly_within_the_cap():
+    strips = chunk_strips(-3, -2, 60, 4, cap=100)
+    covered = [(x, z) for x1, z1, x2, z2 in strips for x in range(x1, x2 + 1) for z in range(z1, z2 + 1)]
+    assert sorted(covered) == [(x, z) for x in range(-3, 61) for z in range(-2, 5)]
+    assert all((x2 - x1 + 1) * (z2 - z1 + 1) <= 100 for x1, z1, x2, z2 in strips)
+    assert len(strips) == 5  # 64 columns of 7 chunks, 14 columns per strip

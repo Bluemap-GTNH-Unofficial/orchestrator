@@ -16,6 +16,7 @@ from collections.abc import Callable, Iterable
 from dataclasses import dataclass
 from pathlib import Path
 
+from orchestrator.mod_scenes import mod_renderers
 from orchestrator.server import Server, ServerError
 
 OVERWORLD = 0
@@ -104,6 +105,19 @@ def _write_in(server: Server, file: str, data: object) -> None:
 def union_box(boxes: Iterable[Iterable[int]]) -> list[int]:
     boxes = [list(b) for b in boxes]
     return [min(b[i] for b in boxes) for i in range(3)] + [max(b[i] for b in boxes) for i in range(3, 6)]
+
+
+CONTEXT_CHUNKS = 2  # chunks generated and populated around every scene's dump box
+PREGEN_CAP = 4096  # chunks per `bmh pregen`
+
+
+def chunk_strips(cx1: int, cz1: int, cx2: int, cz2: int, cap: int = PREGEN_CAP) -> list[tuple[int, int, int, int]]:
+    """Splits an inclusive chunk rectangle into strips of whole z-columns, each at most ``cap`` chunks."""
+    rows = cz2 - cz1 + 1
+    if rows > cap:
+        raise ServerError(f"chunk rectangle with {rows} rows does not fit {cap}-chunk strips")
+    width = cap // rows
+    return [(x, cz1, min(x + width - 1, cx2), cz2) for x in range(cx1, cx2 + 1, width)]
 
 
 def _zoo(server: Server, modid: str) -> dict:
@@ -325,6 +339,7 @@ SCENES: dict[str, Scene] = {
     "gt-ores": _flat(_gt_ores, "every GT ore material on each gt.blockores2 stone, normal + small; other stones sampled"),
     "gt-multiblocks": _flat(_gt_multiblocks, "GT, GT++, bartworks, TecTech, kekztech multiblocks built with hatches"),
     "terrain-rwg": Scene(level_type="rwg", build=_terrain, description="RWG terrain, 32x32 chunks pregenerated"),
+    "mod-renderers": _flat(mod_renderers, "Chisel CTM, Iron Chests, BiblioCraft, AE2 cables + parts, EnderIO conduits"),
 }
 
 
@@ -361,9 +376,15 @@ def run(name: str, base: Server, out: Path, snapshot: Path) -> dict:
         result.update(scene.build(server))
         result["build_seconds"] = round(time.time() - build_started, 1)
         if "dump_box" in result:
+            x1, _, z1, x2, _, z2 = result["dump_box"]
+            # generate and populate the chunks around the scene: BlueMap skips hires tiles touching chunks that are
+            # missing or unpopulated, which clipped scene edges in renders
+            m = CONTEXT_CHUNKS
+            strips = chunk_strips((x1 >> 4) - m, (z1 >> 4) - m, (x2 >> 4) + m, (z2 >> 4) + m)
+            pregens = [server.bmh("pregen", OVERWORLD, *s) for s in strips]
+            result["context_pregen"] = {"chunks": sum(p["chunks"] for p in pregens), "ms": sum(p["ms"] for p in pregens)}
             # keep the dumped chunks plus a one-chunk margin loaded: their tile entities tick and settle, liquids from
             # outside cannot flow in later, and the dump after the flush reads exactly what was saved
-            x1, _, z1, x2, _, z2 = result["dump_box"]
             chunks = ((x1 >> 4) - 1, (z1 >> 4) - 1, (x2 >> 4) + 1, (z2 >> 4) + 1)
             result["hold"] = server.bmh("hold", OVERWORLD, *chunks)
         # let scheduled block updates settle and delayed tile-entity crashes surface before saving
