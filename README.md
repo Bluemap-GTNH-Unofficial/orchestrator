@@ -1,13 +1,24 @@
-# orchestrator
+# orchestrator: headless GTNH servers and test scenes
 
-Headless test orchestration for the BlueMap GTNH port: GTNH server lifecycle, RCON, the `bmh`
-harness mod (`testing/harness-mod`) and deterministic scene worlds.
+> [!WARNING]
+> Unofficial: not affiliated with BlueMap or GT New Horizons. Vibe coded (written largely by an AI coding agent), no
+> quality guarantee, use at your own risk. See the
+> [umbrella repository](https://github.com/Bluemap-GTNH-Unofficial/BlueMap-GTNH) for details.
+
+Part of [Bluemap-GTNH-Unofficial/BlueMap-GTNH](https://github.com/Bluemap-GTNH-Unofficial/BlueMap-GTNH). Clone the
+umbrella with `git clone --recursive`; this repository expects its sibling checkouts (`BlueMap/`, `harness/` and the
+workspace folders) next to it.
+
+Headless test orchestration for the BlueMap GTNH port: GTNH server lifecycle, RCON, the `bmh` harness mod (the
+sibling [`harness`](https://github.com/Bluemap-GTNH-Unofficial/harness) repository) and deterministic scene worlds,
+which the world reader and the e2e suite are tested on.
 
 Layout it expects (override the root with `BMGTNH_WORKSPACE`):
 
 ```
-<workspace>/
-  BlueMap-GTNH/testing/orchestrator   # this project
+<workspace>/                           # default: the parent of this checkout
+  orchestrator/                        # this project
+  BlueMap/                             # the BlueMap fork (`--verify` runs its :legacy:verifyDump)
   servers/<server>/                    # unpacked GTNH server pack + .rcon-password
   worlds/<snapshot>/                   # world snapshots (created by `orch snapshot` / scenes)
   out/scenes/<scene>/                  # scene outputs: manifests, dumps, registry, scene.json
